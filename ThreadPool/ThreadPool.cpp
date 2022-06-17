@@ -1,23 +1,50 @@
-﻿// ThreadPool.cpp : 此文件包含 "main" 函数。程序执行将在此处开始并结束。
-//
+﻿#include "threadpool.h"
+#include <functional>
 
-#include <iostream>
+const int TASK_MAX_THRESHHOLD = 1024;
 
-int main()
-{
-  std::cout << "Hello World!\n";
+ThreadPool::ThreadPool()
+    : initThreadSize_(4),
+      taskSize(0),
+      taskQueMaxThreadHold_(TASK_MAX_THRESHHOLD),
+      poolMode_(PoolMode::MODE_CACHED) {}
+
+ThreadPool::~ThreadPool() {}
+
+void ThreadPool::setMode(PoolMode mode) {
+  poolMode_ = mode;
 }
 
-// 运行程序: Ctrl + F5 或调试 >“开始执行(不调试)”菜单
-// 调试程序: F5 或调试 >“开始调试”菜单
+void ThreadPool::setTaskQueMaxThreadHold(int threshold) {
+  taskQueMaxThreadHold_ = threshold;
+}
 
+void ThreadPool::submitTask(std::shared_ptr<Task> sp) {
 
+}
 
+void ThreadPool::start(int initThreadSize) {
+  // 记录初始线程个数
+  initThreadSize_ = initThreadSize;
 
-// 入门使用技巧: 
-//   1. 使用解决方案资源管理器窗口添加/管理文件
-//   2. 使用团队资源管理器窗口连接到源代码管理
-//   3. 使用输出窗口查看生成输出和其他消息
-//   4. 使用错误列表窗口查看错误
-//   5. 转到“项目”>“添加新项”以创建新的代码文件，或转到“项目”>“添加现有项”以将现有代码文件添加到项目
-//   6. 将来，若要再次打开此项目，请转到“文件”>“打开”>“项目”并选择 .sln 文件
+  //创建线程对象
+  for (int i = 0; i < initThreadSize_; i++) {
+	//创建thread对象的时候，把线程函数给thread对象
+    threads_.emplace_back(new Thread(std::bind(&ThreadPool::threadFunc, this)));
+  }
+
+  // 启动所有线程
+  for (int i = 0; i < initThreadSize_; i++) {
+    threads_[i]->start(); //需要去执行一个线程函数
+  }
+}
+
+void ThreadPool::threadFunc() {
+
+}
+
+///////////////////////////////// 线程方法实现
+//启动线程
+void Thread::start() {
+
+}
