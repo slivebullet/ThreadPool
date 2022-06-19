@@ -2,12 +2,12 @@
 #ifndef THREADPOOL_H
 #define THREADPOOL_H
 
+#include <atomic>
+#include <condition_variable>
 #include <memory>
+#include <mutex>
 #include <queue>
 #include <vector>
-#include <atomic>
-#include <mutex>
-#include <condition_variable>
 using namespace std;
 
 //任务抽象基类
@@ -26,8 +26,9 @@ enum class PoolMode {
 //线程类型
 class Thread {
  public:
-   // 启动线程
+  // 启动线程
   void start();
+
  private:
 };
 
@@ -54,7 +55,6 @@ class ThreadPool {
   ThreadPool(const ThreadPool&) = delete;
   ThreadPool& operator=(const ThreadPool&) = delete;
 
-
  private:
   std::vector<Thread*> threads_;  //线程列表
   size_t initThreadSize_;         //初试的线程数量
@@ -66,16 +66,15 @@ class ThreadPool {
   std::atomic_uint taskSize;
   int taskQueMaxThreadHold_;  // 任务队列上限1阈值
 
-  std::mutex taskQueMtx_; //保证任务队列的线程安全
-  //TODO 条件变量
-  std::condition_variable notFull_; //表示任务队列不满
+  std::mutex taskQueMtx_;  //保证任务队列的线程安全
+  // TODO 条件变量
+  std::condition_variable notFull_;   //表示任务队列不满
   std::condition_variable notEmpty_;  //表示任务队列不空
 
-  PoolMode poolMode_; //当前线程池的工作模式
+  PoolMode poolMode_;  //当前线程池的工作模式
  private:
-   // 定义线程函数
+  // 定义线程函数
   void threadFunc();
-
 };
 
 #endif  // !THREADPOOL_H
