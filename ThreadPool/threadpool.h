@@ -64,7 +64,7 @@ class ThreadPool {
   ThreadPool& operator=(const ThreadPool&) = delete;
 
  private:
-  std::vector<Thread*> threads_;  //线程列表
+  std::vector<std::unique_ptr<Thread>> threads_;  //线程列表
   size_t initThreadSize_;         //初试的线程数量
   int threadSizeThreshHold_;      // 线程数量上限阈值
 
