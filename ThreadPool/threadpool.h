@@ -8,6 +8,7 @@
 #include <mutex>
 #include <queue>
 #include <vector>
+#include<functional>
 using namespace std;
 
 //任务抽象基类
@@ -26,10 +27,17 @@ enum class PoolMode {
 //线程类型
 class Thread {
  public:
+   // 线程函数对象类型
+   using ThreadFunc = std::function<void()>;
+   //线程构造
+   Thread(ThreadFunc func);
+   //线程析构
+   ~Thread();
   // 启动线程
   void start();
 
  private:
+  ThreadFunc func_;
 };
 
 // 线程池类型
@@ -58,7 +66,7 @@ class ThreadPool {
  private:
   std::vector<Thread*> threads_;  //线程列表
   size_t initThreadSize_;         //初试的线程数量
-  int initThreadSize_;
+  int threadSizeThreshHold_;      // 线程数量上限阈值
 
   // 可能要执行任务的基类自动析构了，到时候就容易出错
   std::queue<std::shared_ptr<Task>> taskQue_;
