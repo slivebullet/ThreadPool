@@ -71,7 +71,7 @@ class ThreadPool {
   // 可能要执行任务的基类自动析构了，到时候就容易出错
   std::queue<std::shared_ptr<Task>> taskQue_;
   // 原子操作加减没必要直接上锁
-  std::atomic_uint taskSize;
+  std::atomic_uint taskSize_;
   int taskQueMaxThreadHold_;  // 任务队列上限1阈值
 
   std::mutex taskQueMtx_;  //保证任务队列的线程安全
