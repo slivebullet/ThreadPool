@@ -21,7 +21,7 @@ void ThreadPool::setTaskQueMaxThreadHold(int threshold) {
 }
 
 //给线程池提交任务	    用户调用该接口传入任务对象，生成任务
-void ThreadPool::submitTask(std::shared_ptr<Task> sp) {
+Result ThreadPool::submitTask(std::shared_ptr<Task> sp) {
   // 获取锁
   std::unique_lock<std::mutex> lock(taskQueMtx_);
   // 线程的通信  等待任务队列有空余
@@ -49,6 +49,8 @@ void ThreadPool::submitTask(std::shared_ptr<Task> sp) {
   // 因为新放了任务，任务队列肯定不空，
   // 在notEmpty_上进行通知,赶快分配线程执行任务
   notEmpty_.notify_all();
+
+  // 返回Result对象
 }
 
 void ThreadPool::start(int initThreadSize) {
@@ -81,33 +83,34 @@ void ThreadPool::threadFunc() {
       // 先获取锁
       std::unique_lock<std::mutex> lock(taskQueMtx_);
 
-	  std::cout << "tid: " << std::this_thread::get_id() << "尝试获取任务"
+      std::cout << "tid: " << std::this_thread::get_id() << "尝试获取任务"
                 << std::endl;
 
       // 等待notEmpty条件
       notEmpty_.wait(lock, [&]() -> bool { return taskQue_.size() > 0; });
 
-	  std::cout << "tid: " << std::this_thread::get_id() << "获取任务成功"
+      std::cout << "tid: " << std::this_thread::get_id() << "获取任务成功"
                 << std::endl;
 
       //从任务队列中取一个任务出来
-	  task = taskQue_.front();
+      task = taskQue_.front();
       taskQue_.pop();
       taskSize_--;
 
-	  // 如果依然有剩余任务，继续通知其他的线程执行任务
+      // 如果依然有剩余任务，继续通知其他的线程执行任务
       if (taskQue_.size() > 0) {
         notEmpty_.notify_all();
-	  }
+      }
 
-	  // 取出一个任务进行通知,通知可以继续提交申请任务
+      // 取出一个任务进行通知,通知可以继续提交申请任务
       notFull_.notify_all();
 
-    } // 出了局部作用域锁自动释放掉
-	
-	if (task) {
-      // 当前线程负责执行这个任务
-      task->run();
+    }  // 出了局部作用域锁自动释放掉
+
+	// 当前线程负责执行这个任务
+    if (task) {
+      //task->run();  //执行任务， 把任务的返回值setVal方法给到Result
+      task->exec();
     }
   }
 }
@@ -126,4 +129,30 @@ void Thread::start() {
 
   // 设置分离线程
   t.detach();
+}
+
+//////  Task方法实现
+void Task::exec() { 
+  result_->setVal(run()); // 这里发生多态调用
+}
+
+/*-------------------Result方法的实现------------------------------------*/
+Result::Result(std::shared_ptr<Task> task, bool isValid)
+    : isValid_(isValid), task_(task) {
+  task->setResult(this);
+}
+
+// 用户调用
+Any Result::get() {
+  if (!isValid_) {
+    return "";
+  }
+  sem_.wait();	// task任务如果没有执行完，这里会阻塞用户的线程
+  return std::move(any_);
+}
+
+// 
+void Result::setVal(Any any) { 
+  this->any_ = std::move(any); 
+  sem_.post();
 }

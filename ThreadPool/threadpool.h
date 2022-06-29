@@ -4,18 +4,115 @@
 
 #include <atomic>
 #include <condition_variable>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <queue>
 #include <vector>
-#include<functional>
 using namespace std;
+
+class Any {
+ public:
+  Any() = default;
+  ~Any() = default;
+  Any(const Any&) = delete;
+  Any& operator=(const Any&) = delete;
+  Any(Any&&) = default;
+  Any& operator=(Any&&) = default;
+
+  // 这个构造函数可以让Any类型接收任意其它的数据
+  template <typename T>
+  Any(T data) : base_(std::make_unique<Derive<T>>(data)) {}
+
+  // 提取出data_数据
+  template <typename T>
+  T cast_() {
+    // 基类指针---》派生类指针
+    Derive<T>* pd = dynamic_cast<Derive<T>>(base_.get());
+    if (pd == nullptr) {
+      throw "type is unmatch!";
+    }
+    return pd->data_;
+  }
+
+ private:
+  class Base {
+   public:
+    virtual ~Base() = default;
+  };
+
+  template <typename T>
+  class Derive : public Base {
+   public:
+    Derive(T data) : data_(data) {}
+    T data_;  //保存了任意的其他类型
+  };
+
+ private:
+  // 定义一个基类指针
+  std::unique_ptr<Base> base_;
+};
+
+// 实现一个信号量类
+class Semaphore {
+ public:
+  Semaphore(int limit = 0) : resLimit_(limit) {}
+  ~Semaphore() = default;
+
+  // 获取一个信号量资源
+  void wait() {
+    std::unique_lock<std::mutex> lock(mtx_);
+    cond_.wait(lock, [&]() -> bool { return resLimit_ > 0; });
+    resLimit_--;
+  }
+
+  // 增加一个信号量资源
+  void post() {
+    std::unique_lock<std::mutex> lock(mtx_);
+    resLimit_++;
+    cond_.notify_all();
+  }
+
+ private:
+  int resLimit_;
+  std::mutex mtx_;
+  std::condition_variable cond_;
+};
+
+class Task;  // Task类型前置申明
+// 实现接收提交到线程池的task任务执行完成后的返回值类型Result
+class Result {
+ public:
+  Result(std::shared_ptr<Task> task, bool isValid = true);
+  ~Result() = default;
+
+  // setVal方法，获取任务执行完的返回值的
+  void setVal(Any any);
+  // get方法， 用户调用这个方法获取Task的返回值
+  Any get();
+
+ private:
+  Any any_;                     // 存储任务的返回值
+  Semaphore sem_;               // 线程通信信号量
+  std::shared_ptr<Task> task_;  // 指向对应获取返回值的任务对象
+  std::atomic_bool isValid_;    //返回值是否有效
+};
 
 //任务抽象基类
 class Task {
  public:
+  Task() : result_(nullptr) {}
   // 用户可以自定义任意任务类型，从Task继承，重写run方法。，实现自定义任务处理
-  virtual void run() = 0;
+  virtual Any run() = 0;
+  void exec();
+  void setResult(Result* res) { 
+	if (result_ != nullptr) {
+      result_ = res;
+    } 
+  }
+
+ private:
+  Result* result_;  // Result生命周期长于Task的
 };
 
 // 线程池支持的模式
@@ -27,12 +124,12 @@ enum class PoolMode {
 //线程类型
 class Thread {
  public:
-   // 线程函数对象类型
-   using ThreadFunc = std::function<void()>;
-   //线程构造
-   Thread(ThreadFunc func);
-   //线程析构
-   ~Thread();
+  // 线程函数对象类型
+  using ThreadFunc = std::function<void()>;
+  //线程构造
+  Thread(ThreadFunc func);
+  //线程析构
+  ~Thread();
   // 启动线程
   void start();
 
@@ -57,7 +154,7 @@ class ThreadPool {
   void setTaskQueMaxThreadHold(int threshhold);
 
   // 给线程池提交任务
-  void submitTask(std::shared_ptr<Task> sp);
+  Result submitTask(std::shared_ptr<Task> sp);
 
   // 不希望用户对其拷贝与赋值操作
   ThreadPool(const ThreadPool&) = delete;
@@ -65,8 +162,8 @@ class ThreadPool {
 
  private:
   std::vector<std::unique_ptr<Thread>> threads_;  //线程列表
-  size_t initThreadSize_;         //初试的线程数量
-  int threadSizeThreshHold_;      // 线程数量上限阈值
+  size_t initThreadSize_;                         //初试的线程数量
+  int threadSizeThreshHold_;                      // 线程数量上限阈值
 
   // 可能要执行任务的基类自动析构了，到时候就容易出错
   std::queue<std::shared_ptr<Task>> taskQue_;
