@@ -1,125 +1,82 @@
-#include <chrono>
+ï»¿// çº¿ç¨‹æ± é¡¹ç›®.cpp : æ­¤æ–‡ä»¶åŒ…å« "main" å‡½æ•°ã€‚ç¨‹åºæ‰§è¡Œå°†åœ¨æ­¤å¤„å¼€å§‹å¹¶ç»“æŸã€‚
+//
+
 #include <iostream>
+#include <chrono>
 #include <thread>
+using namespace std;
 
 #include "threadpool.h"
 
-/*ÓĞĞ©³¡¾°Ï£Íû»ñÈ¡ÓÃ»§·µ»ØÖµ
-¾ÙÀı£º 1+....+30000µÄºÍ
-thread1 1+....+10000
-thread2 10001+.....20000
-.......
-main thread£º¸øÃ¿Ò»¸öÏß³Ì·ÖÅä¼ÆËã¿Õ¼ä£¬µÈ´ıËûÃÇËãÍê·µ»Ø½á¹û£¬ºÏ²¢×îÖÕµÄ½á¹û
+/*
+æœ‰äº›åœºæ™¯ï¼Œæ˜¯å¸Œæœ›èƒ½å¤Ÿè·å–çº¿ç¨‹æ‰§è¡Œä»»åŠ¡å¾—è¿”å›å€¼å¾—
+ä¸¾ä¾‹ï¼š
+1 + ã€‚ã€‚ã€‚ + 30000çš„å’Œ
+thread1  1 + ... + 10000
+thread2  10001 + ... + 20000
+.....
 
+main threadï¼šç»™æ¯ä¸€ä¸ªçº¿ç¨‹åˆ†é…è®¡ç®—çš„åŒºé—´ï¼Œå¹¶ç­‰å¾…ä»–ä»¬ç®—å®Œè¿”å›ç»“æœï¼Œåˆå¹¶æœ€ç»ˆçš„ç»“æœå³å¯
 */
 
-//class Any {
-// public:
-//  Any() = default;
-//  ~Any() = default;
-//  Any(const Any&) = delete;
-//  Any& operator=(const Any&) = delete;
-//  Any& operator=(Any&&) = default;
-//
-//  // Õâ¸ö¹¹Ôìº¯Êı¿ÉÒÔÈÃAnyÀàĞÍ½ÓÊÕÈÎÒâÆäËüµÄÊı¾İ
-//  template <typename T>
-//  Any(T data) : base_(std::make_unique<Derive<T>>(data)) {}
-//
-//  // ÌáÈ¡³ödata_Êı¾İ
-//  template <typename T>
-//  T cast_() {
-//    // »ùÀàÖ¸Õë---¡·ÅÉÉúÀàÖ¸Õë
-//    Derive<T>* pd = dynamic_cast<Derive<T>>(base_.get());
-//    if (pd == nullptr) {
-//      throw "type is unmatch!";
-//    }
-//    return pd->data_;
-//  }
-//
-// private:
-//  class Base {
-//   public:
-//    virtual ~Base() = default;
-//  };
-//
-//  template <typename T>
-//  class Derive : public Base {
-//   public:
-//    Derive(T data) : data_(data) {}
-//    T data_;  //±£´æÁËÈÎÒâµÄÆäËûÀàĞÍ
-//  };
-//
-// private:
-//  // ¶¨ÒåÒ»¸ö»ùÀàÖ¸Õë
-//  std::unique_ptr<Base> base_;
-//};
-//
-//// ÊµÏÖÒ»¸öĞÅºÅÁ¿Àà
-//class Semaphore {
-// public:
-//  Semaphore(int limit = 0) : resLimit_(limit) {}
-//  ~Semaphore() = default;
-//
-//  // »ñÈ¡Ò»¸öĞÅºÅÁ¿×ÊÔ´
-//  void wait() { std::unique_lock<std::mutex> lock(mtx_);
-//    cond_.wait(lock, [&]() -> bool { return resLimit_ > 0; });
-//    resLimit_--;
-//  }
-//
-//  // Ôö¼ÓÒ»¸öĞÅºÅÁ¿×ÊÔ´
-//  void post() {
-//    std::unique_lock<std::mutex> lock(mtx_);
-//    resLimit_++;
-//    cond_.notify_all();
-//  }
-//
-// private:
-//  int resLimit_;
-//  std::mutex mtx_;
-//  std::condition_variable cond_;
-//};
-//
-//// ÊµÏÖ½ÓÊÕÌá½»µ½Ïß³Ì³ØµÄtaskÈÎÎñÖ´ĞĞÍê³ÉºóµÄ·µ»ØÖµÀàĞÍResult
-//class Result {
-// public:
-//
-// private:
-//  Any any_; // ´æ´¢ÈÎÎñµÄ·µ»ØÖµ
-//  Semaphore sem_; // Ïß³ÌÍ¨ĞÅĞÅºÅÁ¿
-//};
+using uLong = unsigned long long;
 
+class MyTask : public Task
+{
+public:
+    MyTask(int begin, int end)
+        : begin_(begin)
+        , end_(end)
+    {}
+    // é—®é¢˜ä¸€ï¼šæ€ä¹ˆè®¾è®¡runå‡½æ•°çš„è¿”å›å€¼ï¼Œå¯ä»¥è¡¨ç¤ºä»»æ„çš„ç±»å‹
+    // Java Python   Object æ˜¯æ‰€æœ‰å…¶å®ƒç±»ç±»å‹çš„åŸºç±»
+    // C++17 Anyç±»å‹
+    Any run()  // runæ–¹æ³•æœ€ç»ˆå°±åœ¨çº¿ç¨‹æ± åˆ†é…çš„çº¿ç¨‹ä¸­å»åšæ‰§è¡Œäº†!
+    {
+        std::cout << "tid:" << std::this_thread::get_id()
+            << "begin!" << std::endl;
+        std::this_thread::sleep_for(std::chrono::seconds(3));
+        uLong sum = 0;
+        for (uLong i = begin_; i <= end_; i++)
+            sum += i;
+        std::cout << "tid:" << std::this_thread::get_id()
+            << "end!" << std::endl;
 
-class MyTask : public Task {
- public:
-  MyTask(int begin, int end) : begin_(begin), end_(end) {}
-  /*
-  ÎÊÌâ1£º ÔõÃ´Éè¼Ærunº¯ÊıµÄ·µ»ØÖµ£¬¿ÉÒÔ±íÊ¾ÈÎÒâµÄÀàĞÍ
-  */
-  Any run() {
-    // std::cout << "tid: " << std::this_thread::get_id() << "begin"<<std::endl;
-    // std::this_thread::sleep_for(std::chrono::seconds(2));
+        return sum;
+    }
 
-    int sum = 0;
-    for (int i = begin_; i < end_; i++) sum += i;
-  }
-
- private:
-  int begin_;
-  int end_;
+private:
+    int begin_;
+    int end_;
 };
 
-int main() {
+int main()
+{
   ThreadPool pool;
+  // ç”¨æˆ·è‡ªå·±è®¾ç½®çº¿ç¨‹æ± çš„å·¥ä½œæ¨¡å¼
+  pool.setMode(PoolMode::MODE_CACHED);
+  // å¼€å§‹å¯åŠ¨çº¿ç¨‹æ± 
   pool.start(4);
 
-  // ÈçºÎÉèÖÃResult»úÖÆ£¿
-  Result res = pool.submitTask(std::make_shared<MyTask>());
-  int sum = res.get().cast_<int>();  // get·µ»ØÁËÒ»¸öAnyÀàĞÍ£¬ÔõÃ´×ª»¯³É¾ßÌåÀàĞÍ
+  // å¦‚ä½•è®¾è®¡è¿™é‡Œçš„Resultæœºåˆ¶å‘¢
+  Result res1 = pool.submitTask(std::make_shared<MyTask>(1, 100000000));
+  Result res2 = pool.submitTask(std::make_shared<MyTask>(100000001, 200000000));
+  Result res3 = pool.submitTask(std::make_shared<MyTask>(200000001, 300000000));
+  pool.submitTask(std::make_shared<MyTask>(200000001, 300000000));
 
-  pool.submitTask(std::make_shared<MyTask>());
-  pool.submitTask(std::make_shared<MyTask>());
-  pool.submitTask(std::make_shared<MyTask>());
-  pool.submitTask(std::make_shared<MyTask>());
+  pool.submitTask(std::make_shared<MyTask>(200000001, 300000000));
+  pool.submitTask(std::make_shared<MyTask>(200000001, 300000000));
 
-  getchar();
+  // éšç€taskè¢«æ‰§è¡Œå®Œï¼Œtaskå¯¹è±¡æ²¡äº†ï¼Œä¾èµ–äºtaskå¯¹è±¡çš„Resultå¯¹è±¡ä¹Ÿæ²¡äº†
+  uLong sum1 =
+      res1.get()
+          .cast_<uLong>();  // getè¿”å›äº†ä¸€ä¸ªAnyç±»å‹ï¼Œæ€ä¹ˆè½¬æˆå…·ä½“çš„ç±»å‹å‘¢ï¼Ÿ
+  uLong sum2 = res2.get().cast_<uLong>();
+  uLong sum3 = res3.get().cast_<uLong>();
+
+  // Master - Slaveçº¿ç¨‹æ¨¡å‹
+  // Masterçº¿ç¨‹ç”¨æ¥åˆ†è§£ä»»åŠ¡ï¼Œç„¶åç»™å„ä¸ªSlaveçº¿ç¨‹åˆ†é…ä»»åŠ¡
+  // ç­‰å¾…å„ä¸ªSlaveçº¿ç¨‹æ‰§è¡Œå®Œä»»åŠ¡ï¼Œè¿”å›ç»“æœ
+  // Masterçº¿ç¨‹åˆå¹¶å„ä¸ªä»»åŠ¡ç»“æœï¼Œè¾“å‡º
+  cout << (sum1 + sum2 + sum3) << endl;
 }
